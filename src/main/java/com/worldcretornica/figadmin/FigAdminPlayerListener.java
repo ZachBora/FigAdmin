@@ -18,9 +18,9 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
-*/
+ */
 
-package com.btbb.figadmin;
+package com.worldcretornica.figadmin;
 
 import java.util.Date;
 
@@ -31,8 +31,7 @@ import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerLoginEvent;
 import org.bukkit.entity.Player;
 
-import com.btbb.figadmin.FigAdmin;
-
+import com.worldcretornica.figadmin.FigAdmin;
 
 public class FigAdminPlayerListener implements Listener {
     FigAdmin plugin;
@@ -52,7 +51,7 @@ public class FigAdminPlayerListener implements Listener {
                 if (tempTime > 0) {
                     // Player is banned. Check to see if they are still banned
                     // if it's a tempban
-                    long now = System.currentTimeMillis()/1000;
+                    long now = System.currentTimeMillis() / 1000;
                     long diff = tempTime - now;
                     if (diff <= 0) {
                         plugin.bannedPlayers.remove(i);
@@ -64,11 +63,11 @@ public class FigAdminPlayerListener implements Listener {
                 date.setTime(tempTime * 1000);
                 String kickerMsg = null;
                 if (tempban) {
-                    kickerMsg= plugin.formatMessage(plugin.getConfig().getString("messages.LoginTempban"));
+                    kickerMsg = plugin.formatMessage(plugin.getConfig().getString("messages.LoginTempban"));
                     kickerMsg = kickerMsg.replaceAll("%time%", date.toString());
                     kickerMsg = kickerMsg.replaceAll("%reason%", e.reason);
                 } else if (e.type == EditBan.BAN) { // make sure it isn't an ipban
-                    kickerMsg  = plugin.formatMessage(plugin.getConfig().getString("messages.LoginBan"));
+                    kickerMsg = plugin.formatMessage(plugin.getConfig().getString("messages.LoginBan"));
                     kickerMsg = kickerMsg.replaceAll("%time%", date.toString());
                     kickerMsg = kickerMsg.replaceAll("%reason%", e.reason);
                 }
@@ -77,7 +76,28 @@ public class FigAdminPlayerListener implements Listener {
                     return;
                 }
             }
-            
+
+        }
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR)
+    public void onPlayerJoin(PlayerJoinEvent event) {
+        Player player = event.getPlayer();
+        String ip = player.getAddress().getAddress().getHostAddress();
+        for (int i = 0; i < plugin.bannedPlayers.size(); i++) {
+            EditBan e = plugin.bannedPlayers.get(i);
+            if (e.IP != null && e.IP.equals(ip)) {
+                // Player is banned.
+                String kickerMsg = plugin.formatMessage(plugin.getConfig().getString("messages.LoginIPBan"));
+
+                event.setJoinMessage(kickerMsg);
+                player.kickPlayer(kickerMsg);
+
+                if (!e.name.equals(player.getName().toLowerCase())) {
+                    plugin.db.updateAddress(player.getName(), ip);
+                }
+                return;
+            }
         }
     }
 

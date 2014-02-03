@@ -1,4 +1,4 @@
-package com.btbb.figadmin;
+package com.worldcretornica.figadmin;
 
 import java.util.ArrayList;
 import java.io.BufferedReader;
