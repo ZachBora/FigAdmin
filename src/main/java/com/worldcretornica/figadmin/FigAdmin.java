@@ -20,6 +20,12 @@ import org.bukkit.entity.Player;
 import org.bukkit.plugin.PluginDescriptionFile;
 import org.bukkit.plugin.java.JavaPlugin;
 
+import lilypad.client.connect.api.Connect;
+import lilypad.client.connect.api.request.impl.MessageRequest;
+import lilypad.client.connect.api.result.FutureResultListener;
+import lilypad.client.connect.api.result.StatusCode;
+import lilypad.client.connect.api.result.impl.MessageResult;
+
 /**
  * Admin plugin for Bukkit.
  * 
@@ -35,14 +41,20 @@ public class FigAdmin extends JavaPlugin {
     String maindir = "plugins/FigAdmin/";
     ArrayList<EditBan> bannedPlayers;
     private final FigAdminPlayerListener playerListener = new FigAdminPlayerListener(this);
+    
+    private MessageListener listener = new MessageListener(this);
 
     public FileConfiguration config;
     public boolean autoComplete;
     private EditCommand editor;
+    
+    public final String channelname = "wcFigAdmin";
 
     public void onDisable() {
         bannedPlayers = null;
         System.out.println("FigAdmin disabled.");
+        
+        getConnect().unregisterEvents(listener);
     }
 
     /**
@@ -103,6 +115,8 @@ public class FigAdmin extends JavaPlugin {
         editor = new EditCommand(this);
         getCommand("editban").setExecutor(editor);
 
+        getConnect().registerEvents(listener);
+        
         PluginDescriptionFile pdfFile = this.getDescription();
         log.log(Level.INFO, pdfFile.getName() + " version " + pdfFile.getVersion() + " is enabled!");
     }
@@ -141,7 +155,7 @@ public class FigAdmin extends JavaPlugin {
     }
 
     public String expandName(String Name) {
-        if (!autoComplete) 
+        if (!autoComplete)
             return Name;
         if (Name.equals("*"))
             return Name;
@@ -215,7 +229,7 @@ public class FigAdmin extends JavaPlugin {
         if (commandName.equals("figadmin")) {
             return figAdmin(sender);
         }
-        
+
         if (commandName.equals("clearwarnings") || commandName.equals("clearplayer")) {
             return clearWarnings(sender, trimmedArgs);
         }
@@ -306,7 +320,8 @@ public class FigAdmin extends JavaPlugin {
             // sender.sendMessage(formatMessage(globalMsg));
 
             // send a message to everyone!
-            this.getServer().broadcastMessage(formatMessage(globalMsg));
+            //this.getServer().broadcastMessage(formatMessage(globalMsg));
+            requestGlobalMessage(formatMessage(globalMsg));
         } else {
             // Unban failed
             String kickerMsg = getConfig().getString("messages.unbanMsgFailed", "unban failed");
@@ -327,7 +342,6 @@ public class FigAdmin extends JavaPlugin {
             player = (Player) sender;
             kicker = player.getName();
         }
-
         // Has enough arguments?
         if (args.length < 1) {
             return false;
@@ -336,13 +350,9 @@ public class FigAdmin extends JavaPlugin {
         String p = args[0].toLowerCase();
         // Reason stuff
         String reason;
-        boolean broadcast = true;
+        //boolean broadcast = true;
 
         if (args.length > 1) {
-            /*if(args[1].equalsIgnoreCase("-s")){
-                broadcast = false;
-                reason = combineSplit(2, args, " ");
-            }else*/
             reason = combineSplit(1, args, " ");
         } else {
             if (p.equals("*")) {
@@ -384,11 +394,17 @@ public class FigAdmin extends JavaPlugin {
         if (autoComplete)
             p = expandName(p);
         Player victim = this.getServer().getPlayer(p);
+
         if (victim == null) {
-            String kickerMsg = getConfig().getString("messages.kickMsgFailed");
-            kickerMsg = kickerMsg.replaceAll("%victim%", p);
-            sender.sendMessage(formatMessage(kickerMsg));
-            return true;
+            
+            //ZB code
+            String kickerMsg = getConfig().getString("messages.kickMsgVictim");
+            kickerMsg = kickerMsg.replaceAll("%player%", kicker);
+            kickerMsg = kickerMsg.replaceAll("%reason%", reason);
+            
+            requestKick(sender, p, reason, formatMessage(kickerMsg));
+            
+            return true;            
         }
 
         // Log in console
@@ -400,14 +416,14 @@ public class FigAdmin extends JavaPlugin {
         kickerMsg = kickerMsg.replaceAll("%reason%", reason);
         victim.kickPlayer(formatMessage(kickerMsg));
 
-        if (broadcast) {
-            // Send message to all players
-            String kickerMsgAll = getConfig().getString("messages.kickMsgBroadcast");
-            kickerMsgAll = kickerMsgAll.replaceAll("%player%", kicker);
-            kickerMsgAll = kickerMsgAll.replaceAll("%reason%", reason);
-            kickerMsgAll = kickerMsgAll.replaceAll("%victim%", p);
-            this.getServer().broadcastMessage(formatMessage(kickerMsgAll));
-        }
+        // Send message to all players
+        String kickerMsgAll = getConfig().getString("messages.kickMsgBroadcast");
+        kickerMsgAll = kickerMsgAll.replaceAll("%player%", kicker);
+        kickerMsgAll = kickerMsgAll.replaceAll("%reason%", reason);
+        kickerMsgAll = kickerMsgAll.replaceAll("%victim%", p);
+        //this.getServer().broadcastMessage(formatMessage(kickerMsgAll));
+        requestGlobalMessage(formatMessage(kickerMsgAll));
+
         return true;
     }
 
@@ -441,12 +457,12 @@ public class FigAdmin extends JavaPlugin {
             // really the victim?
             // Reason stuff
             String reason = "Ban Hammer has Spoken!";
-            boolean broadcast = true;
+            //boolean broadcast = true;
             if (args.length > 1) {
-                /*if(args[1].equalsIgnoreCase("-s")){
-                    broadcast = false;
-                    reason = combineSplit(2, args, " ");
-                }else*/
+                /*
+                 * if(args[1].equalsIgnoreCase("-s")){ broadcast = false; reason
+                 * = combineSplit(2, args, " "); }else
+                 */
                 reason = combineSplit(1, args, " ");
             }
             if (isBanned(p) != null) {
@@ -489,9 +505,8 @@ public class FigAdmin extends JavaPlugin {
             // Log in console
             log.log(Level.INFO, "[FigAdmin] " + kicker + " banned player " + p + ".");
 
-            if (victim != null) { // If he is online, kick him with a nice
-                // message :)
-
+            if (victim != null) { // If he is online, kick him with a nice message :)
+                
                 // Send message to victim
                 String kickerMsg = getConfig().getString("messages.banMsgVictim");
                 kickerMsg = kickerMsg.replaceAll("%player%", kicker);
@@ -501,6 +516,14 @@ public class FigAdmin extends JavaPlugin {
             // If he isn't online we should check to see if the server even
             // knows who he is
             else {
+                
+                //ZB
+                String kickerMsg = getConfig().getString("messages.banMsgVictim");
+                kickerMsg = kickerMsg.replaceAll("%player%", kicker);
+                kickerMsg = kickerMsg.replaceAll("%reason%", reason);
+                
+                requestBan(sender, p, reason, formatMessage(kickerMsg));
+                
                 OfflinePlayer off = getServer().getOfflinePlayer(p);
                 if (!off.hasPlayedBefore()) {
                     // get offline player is case sensitive ...
@@ -525,14 +548,23 @@ public class FigAdmin extends JavaPlugin {
                     }
                 }
             }
-            // Send message to all players
+            
+            
+            /*// Send message to all players
             if (broadcast) {
                 String kickerMsgAll = getConfig().getString("messages.banMsgBroadcast");
                 kickerMsgAll = kickerMsgAll.replaceAll("%player%", kicker);
                 kickerMsgAll = kickerMsgAll.replaceAll("%reason%", reason);
                 kickerMsgAll = kickerMsgAll.replaceAll("%victim%", p);
                 this.getServer().broadcastMessage(formatMessage(kickerMsgAll));
-            }
+            }*/
+            
+            String kickerMsgAll = getConfig().getString("messages.banMsgBroadcast");
+            kickerMsgAll = kickerMsgAll.replaceAll("%player%", kicker);
+            kickerMsgAll = kickerMsgAll.replaceAll("%reason%", reason);
+            kickerMsgAll = kickerMsgAll.replaceAll("%victim%", p);
+            requestGlobalMessage(formatMessage(kickerMsgAll));
+            
         } catch (Exception exc) {
             exc.printStackTrace();
         }
@@ -566,13 +598,13 @@ public class FigAdmin extends JavaPlugin {
         // the victim?
         // Reason stuff
         String reason;
-        boolean broadcast = true;
+        //boolean broadcast = true;
 
         if (args.length > 3) {
-            /*if(args[1].equalsIgnoreCase("-s")){
-                broadcast = false;
-                reason = combineSplit(2, args, " ");
-            }else*/
+            /*
+             * if(args[1].equalsIgnoreCase("-s")){ broadcast = false; reason =
+             * combineSplit(2, args, " "); }else
+             */
             reason = combineSplit(3, args, " ");
         } else {
             reason = getConfig().getString("banDefaultReason", "Ban hammer has spoken!");
@@ -600,23 +632,31 @@ public class FigAdmin extends JavaPlugin {
         // Log in console
         log.log(Level.INFO, "[FigAdmin] " + kicker + " tempbanned player " + p + ".");
 
-        if (victim != null) { // If he is online, kick him with a nice message
-            // :)
+        if (victim != null) { // If he is online, kick him with a nice message :)
 
             // Send message to victim
             String kickerMsg = getConfig().getString("messages.tempbanMsgVictim");
             kickerMsg = kickerMsg.replaceAll("%player%", kicker);
             kickerMsg = kickerMsg.replaceAll("%reason%", reason);
             victim.kickPlayer(formatMessage(kickerMsg));
+        } else {
+            
+            //ZB
+            String kickerMsg = getConfig().getString("messages.tempbanMsgVictim");
+            kickerMsg = kickerMsg.replaceAll("%player%", kicker);
+            kickerMsg = kickerMsg.replaceAll("%reason%", reason);
+            
+            requestTempBan(sender, p, reason, formatMessage(kickerMsg));
         }
-        if (broadcast) {
-            // Send message to all players
-            String kickerMsgAll = getConfig().getString("messages.tempbanMsgBroadcast");
-            kickerMsgAll = kickerMsgAll.replaceAll("%player%", kicker);
-            kickerMsgAll = kickerMsgAll.replaceAll("%reason%", reason);
-            kickerMsgAll = kickerMsgAll.replaceAll("%victim%", p);
-            this.getServer().broadcastMessage(formatMessage(kickerMsgAll));
-        }
+
+        // Send message to all players
+        String kickerMsgAll = getConfig().getString("messages.tempbanMsgBroadcast");
+        kickerMsgAll = kickerMsgAll.replaceAll("%player%", kicker);
+        kickerMsgAll = kickerMsgAll.replaceAll("%reason%", reason);
+        kickerMsgAll = kickerMsgAll.replaceAll("%victim%", p);
+        //this.getServer().broadcastMessage(formatMessage(kickerMsgAll));
+        requestGlobalMessage(formatMessage(kickerMsgAll));
+            
         return true;
     }
 
@@ -635,12 +675,10 @@ public class FigAdmin extends JavaPlugin {
         }
         EditBan e = isBanned(p);
         if (e != null) {
-            sender.sendMessage(formatMessage(getConfig().getString("messages.playerBanned", "player banned")
-                    .replaceAll("%player%", p)));
+            sender.sendMessage(formatMessage(getConfig().getString("messages.playerBanned", "player banned").replaceAll("%player%", p)));
             EditCommand.showBanInfo(e, sender);
         } else
-            sender.sendMessage(formatMessage(getConfig().getString("messages.playerNotBanned", "player not banned")
-                    .replaceAll("%player%", p)));
+            sender.sendMessage(formatMessage(getConfig().getString("messages.playerNotBanned", "player not banned").replaceAll("%player%", p)));
         return true;
     }
 
@@ -693,8 +731,7 @@ public class FigAdmin extends JavaPlugin {
         Player victim = this.getServer().getPlayer(p); // What player is really
         // the victim?
         if (victim == null) {
-            sender.sendMessage(formatMessage(getConfig().getString("messages.playerNotOnline", "not online")
-                    .replaceAll("%player%", p)));
+            sender.sendMessage(formatMessage(getConfig().getString("messages.playerNotOnline", "not online").replaceAll("%player%", p)));
             return true;
         }
         // Reason stuff
@@ -702,10 +739,6 @@ public class FigAdmin extends JavaPlugin {
         boolean broadcast = true;
 
         if (args.length > 1) {
-            /*if(args[1].equalsIgnoreCase("-s")){
-                broadcast = false;
-                reason = combineSplit(2, args, " ");
-            }else*/
             reason = combineSplit(1, args, " ");
         } else {
             // You must specify a reason
@@ -721,14 +754,12 @@ public class FigAdmin extends JavaPlugin {
 
         // Send message to all players
         if (broadcast) {
-            this.getServer().broadcastMessage(
-                    formatMessage(getConfig().getString("messages.warnMsgBroadcast",
-                            "warning from %player% by %kicker%").replaceAll("%player%", p).replaceAll("%kicker%",
-                            kicker)));
-            this.getServer().broadcastMessage(ChatColor.GRAY + "  " + reason);
+            //this.getServer().broadcastMessage(formatMessage(getConfig().getString("messages.warnMsgBroadcast", "warning from %player% by %kicker%").replaceAll("%player%", p).replaceAll("%kicker%", kicker)));
+            //this.getServer().broadcastMessage(ChatColor.GRAY + "  " + reason);
+            requestGlobalMessage(formatMessage(formatMessage(getConfig().getString("messages.warnMsgBroadcast", "warning from %player% by %kicker%").replaceAll("%player%", p).replaceAll("%kicker%", kicker))));
+            requestGlobalMessage(ChatColor.GRAY + "  " + reason);
         } else {
-            victim.sendMessage(formatMessage(getConfig().getString("messages.warnMsgVictim", "warning from %player%")
-                    .replaceAll("%kicker%", kicker)));
+            victim.sendMessage(formatMessage(getConfig().getString("messages.warnMsgVictim", "warning from %player%").replaceAll("%kicker%", kicker)));
             victim.sendMessage(ChatColor.GRAY + "  " + reason);
 
         }
@@ -741,7 +772,7 @@ public class FigAdmin extends JavaPlugin {
                 sender.sendMessage(formatMessage("&cCan't auto-ban; bad time format:&e '&8" + s + "&e'"));
             } else {
                 // clear warnings before banning them
-               db.clearWarnings(p);
+                db.clearWarnings(p);
                 String time = s.substring(0, i);
                 String format = s.substring(i + 1);
                 String[] tempargs = new String[] { p, time, format, reason };
@@ -808,20 +839,17 @@ public class FigAdmin extends JavaPlugin {
             if (b.IP != null && b.IP.equals(IP)) {
                 db.deleteFullRecord(b.id);
                 bannedPlayers.remove(i);
-                sender.sendMessage(formatMessage(getConfig().getString("messages.unbanMsg").replaceAll("%victim%",
-                        b.name)));
+                sender.sendMessage(formatMessage(getConfig().getString("messages.unbanMsg").replaceAll("%victim%", b.name)));
                 success = true;
             }
         }
         if (!success) {
-            String failed = getConfig().getString("messages.unbanMsgFailed", "unban failed").replaceAll("%victim%",
-                    "IP " + IP);
+            String failed = getConfig().getString("messages.unbanMsgFailed", "unban failed").replaceAll("%victim%", "IP " + IP);
             sender.sendMessage(formatMessage(failed));
         }
         return true;
     }
 
-    
     private boolean clearWarnings(CommandSender sender, String[] args) {
         if (!hasPermission(sender, "figadmin.clearwarnings")) {
             sender.sendMessage(formatMessage(getConfig().getString("messages.noPermission")));
@@ -837,17 +865,14 @@ public class FigAdmin extends JavaPlugin {
         }
         int x = db.clearWarnings(player);
         if (x > 0) {
-            sender.sendMessage(formatMessage(getConfig().getString
-                    ("messages.warnDeleted", "warnings deleted").
-                    replaceAll("%player%", player).replaceAll("%number%", x+"")));
-            
+            sender.sendMessage(formatMessage(getConfig().getString("messages.warnDeleted", "warnings deleted").replaceAll("%player%", player).replaceAll("%number%", x + "")));
+
         } else {
-            sender.sendMessage(formatMessage(getConfig().getString
-                    ("messages.warnNone", "no warnings").
-                    replaceAll("%player%", player)));
+            sender.sendMessage(formatMessage(getConfig().getString("messages.warnNone", "no warnings").replaceAll("%player%", player)));
         }
         return true;
     }
+
     private boolean importFromKiwi(CommandSender sender, String[] args) {
 
         boolean auth = false;
@@ -919,5 +944,84 @@ public class FigAdmin extends JavaPlugin {
             // must be console
             return true;
         }
+    }
+
+    public Connect getConnect() {
+        return super.getServer().getServicesManager().getRegistration(Connect.class).getProvider();
+    }
+
+    public void requestKick(final CommandSender kicker, String kicked, String reason, final String kickerMsg) {
+        try {
+
+            Connect connect = this.getConnect();
+
+            kicked = kicked.replace(";","");
+            reason = reason.replace(";","");
+            
+            connect.request(new MessageRequest("", channelname, "KICK;" + kicked + ";" + reason + ";" + kicker.getName())).registerListener(new FutureResultListener<MessageResult>() {
+                public void onResult(MessageResult redirectResult) {
+                    if (redirectResult.getStatusCode() == StatusCode.SUCCESS) {
+                        return;
+                    }
+                    kicker.sendMessage(kickerMsg);
+                }
+            });
+
+        } catch (Exception e) {}
+    }
+    
+    public void requestBan(final CommandSender banner, String banned, String reason, final String kickerMsg) {
+        try {
+
+            Connect connect = this.getConnect();
+
+            banned = banned.replace(";","");
+            reason = reason.replace(";","");
+            
+            connect.request(new MessageRequest("", channelname, "BAN;" + banned + ";" + reason + ";" + banner.getName())).registerListener(new FutureResultListener<MessageResult>() {
+                public void onResult(MessageResult redirectResult) {
+                    if (redirectResult.getStatusCode() == StatusCode.SUCCESS) {
+                        return;
+                    }
+                    banner.sendMessage(kickerMsg);
+                }
+            });
+
+        } catch (Exception e) {}
+    }
+    
+    public void requestTempBan(final CommandSender banner, String banned, String reason, final String kickerMsg) {
+        try {
+
+            Connect connect = this.getConnect();
+
+            banned = banned.replace(";","");
+            reason = reason.replace(";","");
+            
+            connect.request(new MessageRequest("", channelname, "TEMPBAN;" + banned + ";" + reason + ";" + banner.getName())).registerListener(new FutureResultListener<MessageResult>() {
+                public void onResult(MessageResult redirectResult) {
+                    if (redirectResult.getStatusCode() == StatusCode.SUCCESS) {
+                        return;
+                    }
+                    banner.sendMessage(kickerMsg);
+                }
+            });
+
+        } catch (Exception e) {}
+    }
+    
+    public void requestGlobalMessage(final String message) {
+        try {
+            Connect connect = this.getConnect();
+
+            connect.request(new MessageRequest("", channelname, "MSG;" + message.replace(";",""))).registerListener(new FutureResultListener<MessageResult>() {
+                public void onResult(MessageResult redirectResult) {
+                    if (redirectResult.getStatusCode() == StatusCode.SUCCESS) {
+                        return;
+                    }
+                }
+            });
+
+        } catch (Exception e) {}
     }
 }

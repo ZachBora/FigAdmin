@@ -1,8 +1,7 @@
 name: FigAdmin
-main: com.btbb.figadmin.FigAdmin
-version: 4.0.15
-website: http://www.bobtheblueberry.com
-author: Serge Humphrey
+main: com.worldcretornica.figadmin.FigAdmin
+version: 1
+author: ZachBora
 description: >
              Admin plugin for Bukkit, adds important functions like kicking and banning.
 commands:

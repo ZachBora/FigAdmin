@@ -45,6 +45,10 @@
 				<updatePolicy>always</updatePolicy>
 			</snapshots>
 		</repository>
+		<repository>
+			<id>lilypad</id>
+			<url>http://ci.lilypadmc.org/plugin/repository/everything</url>
+		</repository>
 	</repositories>
 
 	<dependencies>
@@ -52,6 +56,11 @@
 			<groupId>org.bukkit</groupId>
 			<artifactId>bukkit</artifactId>
 			<version>1.7.2-R0.1-SNAPSHOT</version>
+		</dependency>
+		<dependency>
+			<groupId>lilypad.client.connect</groupId>
+			<artifactId>api</artifactId>
+			<version>0.0.1-SNAPSHOT</version>
 		</dependency>
 	</dependencies>
 </project>
