@@ -30,6 +30,7 @@ public class MessageListener {
                 String sender;
                 String victimMsg;
                 String logMsg;
+                long time;
                 
                 switch(action){
                 case "KICK":
@@ -57,7 +58,25 @@ public class MessageListener {
                         sender = tokens[3];
                         victimMsg = plugin.getConfig().getString("messages.banMsgVictim");
                         logMsg = "[FigAdmin] " + sender + " banned player " + name + ". Reason: " + reason;
+                        
+                        EditBan ban = null;
+                        String ip = null;
+                        ban = new EditBan(name, reason, sender, ip, EditBan.BAN);
+                        plugin.bannedPlayers.add(ban);
+                        
                         kick(name, reason, sender, logMsg, victimMsg);
+                    }
+                    break;
+                case "UNBAN":
+                    if(tokens.length >= 2) {
+                        name = tokens[1];
+                        
+                        for (int i = 0; i < plugin.bannedPlayers.size(); i++) {
+                            EditBan e = plugin.bannedPlayers.get(i);
+                            if (e.name.equals(name)) {
+                                plugin.bannedPlayers.remove(i);
+                            }
+                        }
                     }
                     break;
                 case "TEMPBAN":
@@ -67,6 +86,16 @@ public class MessageListener {
                         sender = tokens[3];
                         victimMsg = plugin.getConfig().getString("messages.tempbanMsgVictim");
                         logMsg = "[FigAdmin] " + sender + " tempbanned player " + name + ".";
+                        
+                        if(tokens.length >= 5) {
+                            time = Long.parseLong(tokens[4]);
+                        } else {
+                            time = 0;
+                        }
+                        
+                        EditBan ban = new EditBan(name, reason, sender, time, EditBan.BAN);
+                        plugin.bannedPlayers.add(ban);
+                        
                         kick(name, reason, sender, logMsg, victimMsg);
                     }
                     break;

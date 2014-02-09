@@ -321,7 +321,11 @@ public class FigAdmin extends JavaPlugin {
 
             // send a message to everyone!
             //this.getServer().broadcastMessage(formatMessage(globalMsg));
+            
+            requestUnban(p);
+            
             requestGlobalMessage(formatMessage(globalMsg));
+            
         } else {
             // Unban failed
             String kickerMsg = getConfig().getString("messages.unbanMsgFailed", "unban failed");
@@ -646,7 +650,7 @@ public class FigAdmin extends JavaPlugin {
             kickerMsg = kickerMsg.replaceAll("%player%", kicker);
             kickerMsg = kickerMsg.replaceAll("%reason%", reason);
             
-            requestTempBan(sender, p, reason, formatMessage(kickerMsg));
+            requestTempBan(sender, p, reason, formatMessage(kickerMsg), tempTime);
         }
 
         // Send message to all players
@@ -990,7 +994,25 @@ public class FigAdmin extends JavaPlugin {
         } catch (Exception e) {}
     }
     
-    public void requestTempBan(final CommandSender banner, String banned, String reason, final String kickerMsg) {
+    public void requestUnban(String banned) {
+        try {
+
+            Connect connect = this.getConnect();
+
+            banned = banned.replace(";","");
+            
+            connect.request(new MessageRequest("", channelname, "UNBAN;" + banned)).registerListener(new FutureResultListener<MessageResult>() {
+                public void onResult(MessageResult redirectResult) {
+                    if (redirectResult.getStatusCode() == StatusCode.SUCCESS) {
+                        return;
+                    }
+                }
+            });
+
+        } catch (Exception e) {}
+    }
+    
+    public void requestTempBan(final CommandSender banner, String banned, String reason, final String kickerMsg, final long tempTime) {
         try {
 
             Connect connect = this.getConnect();
@@ -998,7 +1020,7 @@ public class FigAdmin extends JavaPlugin {
             banned = banned.replace(";","");
             reason = reason.replace(";","");
             
-            connect.request(new MessageRequest("", channelname, "TEMPBAN;" + banned + ";" + reason + ";" + banner.getName())).registerListener(new FutureResultListener<MessageResult>() {
+            connect.request(new MessageRequest("", channelname, "TEMPBAN;" + banned + ";" + reason + ";" + banner.getName() + ";" + tempTime)).registerListener(new FutureResultListener<MessageResult>() {
                 public void onResult(MessageResult redirectResult) {
                     if (redirectResult.getStatusCode() == StatusCode.SUCCESS) {
                         return;
